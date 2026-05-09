@@ -516,3 +516,117 @@ async def copytrading_leaderboard(
         "sort": sort,
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
+@app.get("/copytrading/trader/{wallet}/trades")
+async def trader_trades(wallet: str, limit: int = 50):
+    wallet = wallet.strip()
+
+    attempts = [
+        {
+            "endpoint": f"{DATA_API_BASE}/activity",
+            "params": {
+                "proxy_wallet": wallet,
+                "type": "TRADE",
+                "limit": limit,
+            },
+        },
+        {
+            "endpoint": f"{DATA_API_BASE}/activity",
+            "params": {
+                "user": wallet,
+                "type": "TRADE",
+                "limit": limit,
+            },
+        },
+        {
+            "endpoint": f"{DATA_API_BASE}/activity",
+            "params": {
+                "address": wallet,
+                "type": "TRADE",
+                "limit": limit,
+            },
+        },
+        {
+            "endpoint": f"{DATA_API_BASE}/trades",
+            "params": {
+                "proxy_wallet": wallet,
+                "limit": limit,
+            },
+        },
+        {
+            "endpoint": f"{DATA_API_BASE}/trades",
+            "params": {
+                "user": wallet,
+                "limit": limit,
+            },
+        },
+        {
+            "endpoint": f"{DATA_API_BASE}/trades",
+            "params": {
+                "address": wallet,
+                "limit": limit,
+            },
+        },
+    ]
+
+    raw_items = []
+    successful_attempt = None
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        for attempt in attempts:
+            try:
+                response = await client.get(
+                    attempt["endpoint"],
+                    params=attempt["params"]
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                if isinstance(data, list):
+                    items = data
+                elif isinstance(data, dict):
+                    items = (
+                        data.get("activity")
+                        or data.get("trades")
+                        or data.get("data")
+                        or []
+                    )
+                else:
+                    items = []
+
+                if items:
+                    raw_items = items
+                    successful_attempt = attempt
+                    break
+
+            except Exception:
+                continue
+
+    trades = []
+
+    for item in raw_items[:limit]:
+        slug = item.get("slug") or item.get("eventSlug")
+        market_url = f"https://polymarket.com/event/{slug}" if slug else None
+
+        trades.append({
+            "market_title": item.get("title") or item.get("marketTitle") or "Unknown Market",
+            "market_url": market_url,
+            "side": item.get("side"),
+            "action": item.get("type") or item.get("action"),
+            "price": item.get("price"),
+            "size": item.get("size"),
+            "usdc_size": item.get("usdcSize"),
+            "timestamp": item.get("timestamp") or item.get("createdAt"),
+            "outcome": item.get("outcome"),
+            "condition_id": item.get("conditionId"),
+            "asset_id": item.get("asset") or item.get("assetId"),
+            "transaction_hash": item.get("transactionHash"),
+        })
+
+    return {
+        "wallet": wallet,
+        "trades": trades,
+        "count": len(trades),
+        "successful_attempt": successful_attempt,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "debug_note": "If count is 0, this wallet may have no recent public trades available from this endpoint."
+    }

@@ -393,7 +393,7 @@ async def analyze(payload: dict):
         ],
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
-@app.get("/copytrading/leaderboard")
+
 async def copytrading_leaderboard(
     period: str = "MONTH",
     category: str = "OVERALL",
@@ -408,69 +408,111 @@ async def copytrading_leaderboard(
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "message": "Copy Trading leaderboard endpoint connected. Live trader data integration coming next."
     }
+DATA_API_BASE = "https://data-api.polymarket.com"
 
 
-@app.get("/copytrading/trader/{wallet}/trades")
-async def trader_trades(wallet: str):
-    return {
-        "wallet": wallet,
-        "trades": [],
-        "last_updated": datetime.now(timezone.utc).isoformat(),
-        "message": "Trader trades endpoint connected. Live public trade feed coming next."
+@app.get("/copytrading/leaderboard")
+async def copytrading_leaderboard(
+    period: str = "MONTH",
+    category: str = "OVERALL",
+    sort: str = "PNL",
+    limit: int = 25
+):
+    url = f"{DATA_API_BASE}/v1/leaderboard"
+
+    params = {
+        "limit": limit
     }
 
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
 
-@app.get("/copytrading/followed")
-async def followed_traders():
+    traders = []
+
+    items = data if isinstance(data, list) else data.get("leaderboard", []) if isinstance(data, dict) else []
+
+    for item in items[:limit]:
+        username = item.get("userName")
+        wallet = item.get("proxyWallet")
+
+        traders.append({
+            "rank": item.get("rank"),
+            "wallet": wallet,
+            "name": username or wallet,
+            "pnl": item.get("pnl"),
+            "volume": item.get("vol"),
+            "win_rate": None,
+            "trade_count": None,
+            "category": category,
+            "profile_url": f"https://polymarket.com/@{username}" if username else None,
+            "profile_image": item.get("profileImage"),
+            "x_username": item.get("xUsername"),
+            "verified": item.get("verifiedBadge", False)
+        })
+
+    if sort.upper() == "VOLUME":
+        traders.sort(key=lambda x: x.get("volume") or 0, reverse=True)
+    else:
+        traders.sort(key=lambda x: x.get("pnl") or 0, reverse=True)
+
     return {
-        "traders": [],
+        "traders": traders,
+        "period": period,
+        "category": category,
+        "sort": sort,
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
 
+DATA_API_BASE = "https://data-api.polymarket.com"
 
-@app.post("/copytrading/follow")
-async def follow_trader(payload: dict):
-    return {
-        "success": True,
-        "message": "Trader added to watchlist.",
-        "data": payload
+
+@app.get("/copytrading/leaderboard")
+async def copytrading_leaderboard(
+    period: str = "MONTH",
+    category: str = "OVERALL",
+    sort: str = "PNL",
+    limit: int = 25
+):
+    url = f"{DATA_API_BASE}/v1/leaderboard"
+
+    params = {
+        "limit": limit
     }
 
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
 
-@app.post("/copytrading/unfollow")
-async def unfollow_trader(payload: dict):
+    traders = []
+
+    for item in data[:limit] if isinstance(data, list) else []:
+        traders.append({
+            "rank": item.get("rank"),
+            "wallet": item.get("proxyWallet"),
+            "name": item.get("userName") or item.get("proxyWallet"),
+            "pnl": item.get("pnl"),
+            "volume": item.get("vol"),
+            "win_rate": None,
+            "trade_count": None,
+            "category": category,
+            "profile_url": f"https://polymarket.com/@{item.get('userName')}" if item.get("userName") else None,
+            "profile_image": item.get("profileImage"),
+            "x_username": item.get("xUsername"),
+            "verified": item.get("verifiedBadge", False)
+        })
+
+    if sort.upper() == "VOLUME":
+        traders.sort(key=lambda x: x.get("volume") or 0, reverse=True)
+    else:
+        traders.sort(key=lambda x: x.get("pnl") or 0, reverse=True)
+
     return {
-        "success": True,
-        "message": "Trader removed from watchlist.",
-        "data": payload
-    }
-
-
-@app.post("/copytrading/simulate")
-async def simulate_copytrading(payload: dict):
-    return {
-        "summary": {
-            "virtual_bankroll": payload.get("virtual_bankroll", 1000),
-            "simulated_trades": 0,
-            "skipped_trades": 0,
-            "estimated_exposure": 0,
-            "risk_status": "Neutral"
-        },
-        "copied_simulation": [],
-        "skipped": [],
-        "warnings": [
-            "Simulation only. No real trades were placed."
-        ],
-        "last_updated": datetime.now(timezone.utc).isoformat()
-    }
-
-
-@app.get("/copytrading/simulation/summary")
-async def simulation_summary():
-    return {
-        "paper_pnl": 0,
-        "paper_win_rate": None,
-        "open_simulated_positions": 0,
-        "closed_simulated_positions": 0,
+        "traders": traders,
+        "period": period,
+        "category": category,
+        "sort": sort,
         "last_updated": datetime.now(timezone.utc).isoformat()
     }

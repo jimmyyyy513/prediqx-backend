@@ -393,3 +393,84 @@ async def analyze(payload: dict):
         ],
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
+@app.get("/copytrading/leaderboard")
+async def copytrading_leaderboard(
+    period: str = "MONTH",
+    category: str = "OVERALL",
+    sort: str = "PNL",
+    limit: int = 25
+):
+    return {
+        "traders": [],
+        "period": period,
+        "category": category,
+        "sort": sort,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "message": "Copy Trading leaderboard endpoint connected. Live trader data integration coming next."
+    }
+
+
+@app.get("/copytrading/trader/{wallet}/trades")
+async def trader_trades(wallet: str):
+    return {
+        "wallet": wallet,
+        "trades": [],
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "message": "Trader trades endpoint connected. Live public trade feed coming next."
+    }
+
+
+@app.get("/copytrading/followed")
+async def followed_traders():
+    return {
+        "traders": [],
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.post("/copytrading/follow")
+async def follow_trader(payload: dict):
+    return {
+        "success": True,
+        "message": "Trader added to watchlist.",
+        "data": payload
+    }
+
+
+@app.post("/copytrading/unfollow")
+async def unfollow_trader(payload: dict):
+    return {
+        "success": True,
+        "message": "Trader removed from watchlist.",
+        "data": payload
+    }
+
+
+@app.post("/copytrading/simulate")
+async def simulate_copytrading(payload: dict):
+    return {
+        "summary": {
+            "virtual_bankroll": payload.get("virtual_bankroll", 1000),
+            "simulated_trades": 0,
+            "skipped_trades": 0,
+            "estimated_exposure": 0,
+            "risk_status": "Neutral"
+        },
+        "copied_simulation": [],
+        "skipped": [],
+        "warnings": [
+            "Simulation only. No real trades were placed."
+        ],
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/copytrading/simulation/summary")
+async def simulation_summary():
+    return {
+        "paper_pnl": 0,
+        "paper_win_rate": None,
+        "open_simulated_positions": 0,
+        "closed_simulated_positions": 0,
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
